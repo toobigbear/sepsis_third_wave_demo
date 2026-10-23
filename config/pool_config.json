@@ -1,0 +1,25 @@
+{
+  "project_name": "sepsis_third_wave_demo",
+  "decision_point": "初始复苏完成后：优先补液扩容 VS 上调去甲肾上腺素剂量",
+  "options": [
+    {
+      "id": "A",
+      "name": "选项 A：优先增加晶体液体补液",
+      "short": "优先补液扩容",
+      "description": "在初始复苏完成后，优先给予晶体液扩容，评估容量反应性后再调整升压药。"
+    },
+    {
+      "id": "B",
+      "name": "选项 B：优先上调去甲肾上腺素剂量",
+      "short": "优先上调升压药",
+      "description": "在初始复苏完成后，优先上调去甲肾上腺素剂量，尽快恢复灌注压。"
+    }
+  ],
+  "default_threshold": 60,
+  "reward_weights": {
+    "survival": 0.5,
+    "lactate_improvement": 0.3,
+    "vasopressor_reduction": 0.2
+  },
+  "notes": "选项池由临床专家维护；算法无权增删、剔除劣效方案。真实项目权重必须 ICU 临床专家组确定。"
+}

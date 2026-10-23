@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="data:,">
+<title>重症 AI 第三波浪潮｜床旁自适应随机化仿真 DEMO</title>
+<script src="/static/vendor/tailwind.js"></script>
+<script src="/static/vendor/chart.umd.min.js"></script>
+<style>
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; background: #f4f7fb; }
+  .med-blue { color: #0F5199; }
+  .bg-med-blue { background-color: #0F5199; }
+  .tab-btn { transition: all .15s ease; }
+  .tab-btn.active { background-color: #0F5199; color: #fff; }
+  .watermark { color: #b45309; font-size: 12px; margin-top: 6px; }
+  .big-btn { padding: 14px 28px; font-size: 18px; border-radius: 12px; font-weight: 600; }
+  .card { background: #fff; border-radius: 14px; box-shadow: 0 2px 10px rgba(15,81,153,.08); }
+  table.audit td, table.audit th { font-size: 13px; padding: 6px 8px; }
+</style>
+</head>
+<body class="pb-16">
+
+<!-- 标题栏 -->
+<div class="bg-med-blue text-white px-6 py-5 shadow">
+  <h1 class="text-3xl font-extrabold tracking-wide">重症 AI｜床旁自适应随机化 DEMO</h1>
+  <p class="text-blue-100 mt-1 text-sm">核心思想来源：Intensive Care Medicine 2026 述评（Elbers / Ercole / Angus）——高置信推荐 · 低置信自适应随机 · 照护即学习【仅仿真】</p>
+</div>
+
+<!-- Tab 导航 -->
+<div class="flex flex-wrap gap-2 px-6 py-4 bg-white shadow">
+  <button data-tab="tab1" class="tab-btn active px-6 py-3 rounded-lg border-2 border-med-blue text-med-blue font-bold text-lg">① 首页总览</button>
+  <button data-tab="tab2" class="tab-btn px-6 py-3 rounded-lg border-2 border-med-blue text-med-blue font-bold text-lg">② 患者状态面板</button>
+  <button data-tab="tab3" class="tab-btn px-6 py-3 rounded-lg border-2 border-med-blue text-med-blue font-bold text-lg">③ 核心决策面板</button>
+  <button data-tab="tab4" class="tab-btn px-6 py-3 rounded-lg border-2 border-med-blue text-med-blue font-bold text-lg">④ 结局反馈 &amp; 策略更新</button>
+  <button data-tab="tab5" class="tab-btn px-6 py-3 rounded-lg border-2 border-med-blue text-med-blue font-bold text-lg">⑤ 审计日志</button>
+</div>
+
+<div class="px-6 py-6 max-w-7xl mx-auto">
+
+<!-- ============ Tab1 首页总览 ============ -->
+<div id="tab1" class="panel">
+  <div class="grid md:grid-cols-3 gap-4 mb-6">
+    <div class="card p-5 border-t-4 border-slate-400">
+      <h3 class="font-bold text-xl text-slate-700">🌊 第一波：任务专用机器学习</h3>
+      <p class="mt-2 text-slate-600">脓毒症风险预测、亚表型划分等。<b>教训</b>：预警增加了工作负荷，却没有改善结局——"算得出"不等于"可行动"。</p>
+    </div>
+    <div class="card p-5 border-t-4 border-blue-400">
+      <h3 class="font-bold text-xl med-blue">🤖 第二波：生成式 Agent 大模型</h3>
+      <p class="mt-2 text-slate-600">我们 POC1-5 所处阶段：指南证据助手、多 Agent 会诊。<b>现状</b>：能力"超人"，但验证最少的应用反而最贴近患者。</p>
+    </div>
+    <div class="card p-5 border-t-4 border-green-500 bg-green-50">
+      <h3 class="font-bold text-xl text-green-700">🎯 第三波（本 DEMO）：在线自适应随机 + 照护即学习</h3>
+      <p class="mt-2 text-slate-700">模型<b>有把握时直接推荐</b>最优方案；<b>没把握时在临床均势选项池内自适应随机</b>，观察结局、持续更新策略。随机化被保留 → 仍然因果严谨。<span class="text-red-600 font-bold">【仅仿真演示】</span></p>
+    </div>
+  </div>
+
+  <!-- 模型开关区域 -->
+  <div class="card p-5 mb-6 border-2 border-blue-200">
+    <h3 class="font-bold text-xl med-blue mb-3">🔌 本地大模型 &amp; 向量检索增强（可选开关）</h3>
+    <label class="flex items-center gap-3 text-lg cursor-pointer">
+      <input type="checkbox" id="llmToggle" class="w-6 h-6 accent-blue-700">
+      <span class="font-bold">启用本地大模型 &amp; 向量检索增强</span>
+    </label>
+    <p class="text-sm text-slate-500 mt-1">关闭则不调用 LM-Studio，全部演示功能依然可用；打开需提前启动 LM-Studio，加载 LLM 与 nomic-embed-text-v1.5-Q8_0-GGUF，开启 API 服务 http://127.0.0.1:1234/v1</p>
+    <div class="flex flex-wrap items-center gap-4 mt-4">
+      <label class="text-lg">LLM 模型：
+        <select id="llmModel" disabled class="border rounded px-3 py-2 text-lg bg-slate-100">
+          <option value="qwen3-8b">Qwen3-8B-GGUF</option>
+          <option value="qwen/qwen3.5-9b">Qwen3.5-9B-GGUF</option>
+        </select>
+      </label>
+      <div id="connBadge" class="px-4 py-2 rounded-lg font-bold text-lg bg-slate-200 text-slate-600">LM-Studio 连接状态：探测中…</div>
+    </div>
+  </div>
+
+  <!-- 模式选择 -->
+  <div class="card p-5">
+    <h3 class="font-bold text-xl med-blue mb-3">🚀 选择演示模式（二选一）</h3>
+    <div class="flex flex-wrap gap-4 items-center">
+      <label class="flex items-center gap-2 text-lg cursor-pointer border rounded-xl px-4 py-3 hover:bg-blue-50">
+        <input type="radio" name="mode" value="auto" checked class="w-5 h-5 accent-blue-700"> 🧪 自动生成模拟患者轨迹模式
+      </label>
+      <label class="flex items-center gap-2 text-lg cursor-pointer border rounded-xl px-4 py-3 hover:bg-blue-50">
+        <input type="radio" name="mode" value="csv" class="w-5 h-5 accent-blue-700"> 📂 回放内置模拟病例 CSV 模式
+      </label>
+      <select id="caseSelect" class="border rounded px-3 py-2 text-lg hidden"></select>
+      <button id="startBtn" class="big-btn bg-med-blue text-white hover:bg-blue-800 shadow">▶ 开始会话（初始化老虎机）</button>
+    </div>
+    <p class="text-sm text-slate-500 mt-2">开始会话将重置贝叶斯老虎机全部统计状态，并创建/载入虚拟患者。</p>
+  </div>
+</div>
+
+<!-- ============ Tab2 患者状态面板 ============ -->
+<div id="tab2" class="panel hidden">
+  <div class="card p-5 mb-4">
+    <h3 class="font-bold text-2xl med-blue">🛏️ 模拟床旁患者</h3>
+    <div id="patientInfo" class="grid md:grid-cols-4 gap-3 mt-3 text-lg">
+      <div>虚拟患者 ID：<b id="pId">—</b></div>
+      <div>年龄：<b id="pAge">—</b></div>
+      <div>性别：<b id="pSex">—</b></div>
+      <div>诊断：<b class="text-red-600">脓毒症休克（模拟）</b></div>
+    </div>
+    <div class="mt-2 text-lg">潜在反应类型（仅演示可见，真实系统不可观测）：<span id="pType" class="px-3 py-1 rounded-full bg-blue-100 text-med-blue font-bold">—</span></div>
+  </div>
+
+  <div class="card p-5 mb-4">
+    <h3 class="font-bold text-xl med-blue mb-2">📈 时序指标趋势（MAP / 乳酸 / 尿量 / 去甲肾上腺素 / SOFA）</h3>
+    <div style="height:380px"><canvas id="trendChart"></canvas></div>
+  </div>
+
+  <div class="card p-5 mb-4 border-l-8 border-yellow-400">
+    <p class="text-xl font-bold">⏱️ 当前待决策：<span class="text-red-600">初始复苏完成，选择液体扩容 OR 上调升压药</span></p>
+  </div>
+
+  <div class="card p-5 mb-4">
+    <h3 class="font-bold text-xl med-blue">🎚️ 模型不确定性指数：<span id="uncVal">—</span> / 100</h3>
+    <div class="w-full bg-slate-200 rounded-full h-8 mt-2 overflow-hidden">
+      <div id="uncBar" class="h-8 rounded-full bg-gradient-to-r from-green-500 via-yellow-400 to-red-500 transition-all duration-500" style="width:0%"></div>
+    </div>
+    <p class="text-sm text-slate-500 mt-1">数值越高，代表当前亚组证据越不足（100 = 完全无法区分选项优劣）。</p>
+  </div>
+
+  <button id="nextStepBtn" class="big-btn bg-med-blue text-white hover:bg-blue-800 shadow">⏭ 刷新下一时间步（推进模拟病程）</button>
+</div>
+
+<!-- ============ Tab3 核心决策面板 ============ -->
+<div id="tab3" class="panel hidden">
+  <div class="card p-5 mb-4">
+    <h3 class="font-bold text-2xl med-blue mb-2">⚖️ 临床均势选项池</h3>
+    <p class="text-sm text-slate-600 italic mb-3">选项池由临床专家维护；算法无权增删、剔除劣效方案。</p>
+    <div id="poolCards" class="grid md:grid-cols-2 gap-4"></div>
+  </div>
+
+  <div class="card p-5 mb-4">
+    <label class="text-xl font-bold">不确定性阈值：<span id="thrVal" class="med-blue">60</span></label>
+    <input type="range" id="threshold" min="0" max="100" value="60" class="w-full h-4 accent-blue-700 mt-2">
+    <p class="text-sm text-slate-500">不确定性 &lt; 阈值 → 🟢 推荐分支；不确定性 &gt; 阈值 → 🟡 随机探索分支</p>
+    <button id="decideBtn" class="big-btn bg-red-600 text-white hover:bg-red-700 shadow mt-4">🎲 执行本次决策计算（Thompson 采样）</button>
+  </div>
+
+  <!-- 决策结果 -->
+  <div id="decisionResult" class="hidden mb-4"></div>
+  <div id="posteriorWrap" class="card p-5 mb-4 hidden">
+    <h3 class="font-bold text-xl med-blue mb-2">📊 各选项后验期望收益 + 95% 置信区间（Beta 后验，蒙特卡洛估计）</h3>
+    <div style="height:320px"><canvas id="postChart"></canvas></div>
+    <p class="watermark">【仿真演示，非临床建议】</p>
+  </div>
+
+  <!-- 医生否决 -->
+  <div class="card p-5 mb-4 border-2 border-orange-300">
+    <h3 class="font-bold text-xl text-orange-700 mb-2">🧑‍⚕️ 临床医生否决（医生拥有最终决策权）</h3>
+    <div class="flex flex-wrap gap-3 items-center">
+      <input id="vetoReason" placeholder="填写否决理由（写入审计日志）" class="border rounded px-3 py-2 text-lg flex-1 min-w-64">
+      <select id="vetoAction" class="border rounded px-3 py-2 text-lg">
+        <option value="">手动指定动作…</option>
+        <option value="A">强制执行为 A</option>
+        <option value="B">强制执行为 B</option>
+      </select>
+      <button id="vetoBtn" class="big-btn bg-orange-600 text-white hover:bg-orange-700">确认否决，手动指定动作</button>
+    </div>
+    <p class="watermark">【仿真演示，非临床建议】所有否决记录写入 audit_log.jsonl</p>
+  </div>
+
+  <!-- 安全闸门模拟 -->
+  <div class="card p-5 mb-4 border-2 border-slate-300">
+    <h3 class="font-bold text-xl med-blue mb-1">🛡️ 安全闸门模拟（仅界面演示原文四道安全机制，不做医学逻辑校验）</h3>
+    <div class="flex flex-wrap gap-6 mt-3 text-lg">
+      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="gate1" class="w-5 h-5"> 禁忌条件（肢端缺血，模拟剔除对应选项）</label>
+      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="gate2" class="w-5 h-5"> 紧急急救模式（关闭随机探索分支）</label>
+      <label class="flex items-center gap-2 cursor-pointer"><input type="checkbox" id="gate3" class="w-5 h-5"> 姑息治疗目标切换（退出全部治疗决策输出）</label>
+    </div>
+  </div>
+
+  <!-- LLM 解读 / 向量检索（开关打开才显示） -->
+  <div id="llmAreas" class="hidden">
+    <div class="card p-5 mb-4 border-2 border-purple-300">
+      <h3 class="font-bold text-xl text-purple-700 mb-2">📝 本地大模型临床解读输出区</h3>
+      <button id="interpretBtn" class="big-btn bg-purple-600 text-white hover:bg-purple-700">调用本地 LLM 生成临床解读</button>
+      <div id="llmOut" class="mt-3 p-4 bg-purple-50 rounded-lg text-lg leading-relaxed whitespace-pre-wrap hidden"></div>
+      <p class="watermark">【仿真演示：大模型仅做结果解读，不参与决策，MAB 算法独立输出动作】</p>
+    </div>
+    <div class="card p-5 mb-4 border-2 border-teal-300">
+      <h3 class="font-bold text-xl text-teal-700 mb-2">📚 向量检索参考证据输出区（nomic-embed-text-v1.5）</h3>
+      <button id="retrieveBtn" class="big-btn bg-teal-600 text-white hover:bg-teal-700">检索相关指南证据</button>
+      <div id="retrievalOut" class="mt-3 space-y-3 hidden"></div>
+      <p class="watermark">【仿真检索证据，仅供参考，不改变算法决策】</p>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Tab4 结局反馈 & 策略更新 ============ -->
+<div id="tab4" class="panel hidden">
+  <div class="card p-5 mb-4 border-l-8 border-yellow-400">
+    <p class="text-lg">⚠️ 本 DEMO 为仿真：结局不会自动从患者模拟流读取，需要手动提交——模拟现实中患者需要数天随访才能拿到结局。真实临床场景此处需等待随访，本 Demo 直接仿真完成策略更新。</p>
+  </div>
+
+  <div class="card p-5 mb-4">
+    <h3 class="font-bold text-2xl med-blue mb-3">📋 仿真结局输入</h3>
+    <div class="grid md:grid-cols-2 gap-4 text-lg">
+      <label>28 天生存：
+        <select id="oSurvival" class="border rounded px-3 py-2 ml-2">
+          <option value="1">存活</option><option value="0">死亡</option>
+        </select>
+      </label>
+      <label>乳酸下降幅度（mmol/L）：<input id="oLactate" type="number" step="0.1" min="0" max="10" value="1.5" class="border rounded px-3 py-2 w-28 ml-2"></label>
+      <label>升压药减量是否达成：
+        <select id="oVaso" class="border rounded px-3 py-2 ml-2">
+          <option value="1">是</option><option value="0">否</option>
+        </select>
+      </label>
+      <label>ICU 停留天数：<input id="oIcu" type="number" step="0.5" min="0" max="120" value="10" class="border rounded px-3 py-2 w-28 ml-2"></label>
+    </div>
+  </div>
+
+  <div class="card p-5 mb-4">
+    <h3 class="font-bold text-2xl med-blue mb-2">⚖️ 奖励函数权重（演示权重变化如何改变策略输出）</h3>
+    <p class="text-sm text-slate-500 italic mb-3">真实项目权重必须 ICU 临床专家组确定。</p>
+    <div class="grid md:grid-cols-3 gap-6 text-lg">
+      <div>生存获益权重：<b id="wSurvV">0.5</b><input type="range" id="wSurv" min="0" max="1" step="0.05" value="0.5" class="w-full accent-blue-700"></div>
+      <div>乳酸改善权重：<b id="wLacV">0.3</b><input type="range" id="wLac" min="0" max="1" step="0.05" value="0.3" class="w-full accent-blue-700"></div>
+      <div>升压药减量权重：<b id="wVasoV">0.2</b><input type="range" id="wVaso" min="0" max="1" step="0.05" value="0.2" class="w-full accent-blue-700"></div>
+    </div>
+  </div>
+
+  <button id="outcomeBtn" class="big-btn bg-green-600 text-white hover:bg-green-700 shadow mb-4">📤 提交仿真结局，更新老虎机策略</button>
+  <div id="outcomeMsg" class="hidden mb-4 p-4 rounded-lg font-bold text-lg"></div>
+
+  <div id="compareWrap" class="card p-5 hidden">
+    <h3 class="font-bold text-xl med-blue mb-2">📊 策略更新前后：各选项后验期望收益对比</h3>
+    <div style="height:340px"><canvas id="compareChart"></canvas></div>
+    <p class="text-sm text-slate-500 mt-1">多次迭代后可肉眼观察到优势选项概率抬升——这就是"照护即学习"的仿真闭环。</p>
+    <p class="watermark">【仿真演示，非临床建议】</p>
+  </div>
+</div>
+
+<!-- ============ Tab5 审计日志 ============ -->
+<div id="tab5" class="panel hidden">
+  <div class="card p-5">
+    <div class="flex flex-wrap gap-3 items-center mb-4">
+      <h3 class="font-bold text-2xl med-blue mr-auto">📜 全流程审计日志（data/audit_log.jsonl）</h3>
+      <button id="refreshAudit" class="big-btn bg-med-blue text-white hover:bg-blue-800" style="padding:10px 20px;font-size:16px">🔄 刷新</button>
+      <a id="exportAudit" href="/api/audit/export" download class="big-btn bg-green-600 text-white hover:bg-green-700" style="padding:10px 20px;font-size:16px">⬇ 导出当前会话日志</a>
+      <button id="clearAudit" class="big-btn bg-red-600 text-white hover:bg-red-700" style="padding:10px 20px;font-size:16px">🗑 清空当前会话日志</button>
+    </div>
+    <div class="overflow-auto" style="max-height:560px">
+      <table class="audit w-full border text-left">
+        <thead class="bg-slate-100 sticky top-0">
+          <tr>
+            <th class="border">时间戳</th><th class="border">会话</th><th class="border">事件</th>
+            <th class="border">患者</th><th class="border">不确定性</th><th class="border">分支类型</th>
+            <th class="border">系统输出</th><th class="border">否决/理由</th><th class="border">结局/奖励</th><th class="border">LLM/证据</th>
+          </tr>
+        </thead>
+        <tbody id="auditBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</div><!-- /container -->
+
+<!-- Toast -->
+<div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-xl text-white font-bold text-lg shadow-2xl hidden z-50"></div>
+
+<script>
+/* ================= 基础工具 ================= */
+const $ = (id) => document.getElementById(id);
+function toast(msg, color = "#0F5199") {
+  const t = $("toast");
+  t.textContent = msg;
+  t.style.background = color;
+  t.classList.remove("hidden");
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.add("hidden"), 2600);
+}
+async function api(path, opts = {}) {
+  const r = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  if (!r.ok) {
+    let detail = "";
+    try { detail = (await r.json()).detail || ""; } catch (e) {}
+    throw new Error(detail || `请求失败（${r.status}）`);
+  }
+  return r.json();
+}
+
+/* ================= Tab 切换（SPA，无页面刷新） ================= */
+document.querySelectorAll(".tab-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    document.querySelectorAll(".panel").forEach(p => p.classList.add("hidden"));
+    $(btn.dataset.tab).classList.remove("hidden");
+    if (btn.dataset.tab === "tab5") loadAudit();
+  });
+});
+function gotoTab(n) { document.querySelector(`.tab-btn[data-tab="tab${n}"]`).click(); }
+
+/* ================= 全局状态 ================= */
+let cfg = null, session = null, llmOn = false;
+let trendChart = null, postChart = null, compareChart = null;
+let lastDecision = null;
+
+/* ================= 模型开关 ================= */
+$("llmToggle").addEventListener("change", (e) => {
+  llmOn = e.target.checked;
+  $("llmModel").disabled = !llmOn;
+  $("llmAreas").classList.toggle("hidden", !llmOn);
+  toast(llmOn ? "已启用本地大模型增强" : "已关闭：MAB 仿真 100% 本地运行", llmOn ? "#16a34a" : "#0F5199");
+});
+
+async function probeConnection() {
+  try {
+    const h = await api("/api/health");
+    const b = $("connBadge");
+    if (h.connected) {
+      b.textContent = `LM-Studio 连接状态：已连接（${h.models.length} 个模型）`;
+      b.className = "px-4 py-2 rounded-lg font-bold text-lg bg-green-100 text-green-700";
+    } else {
+      b.textContent = "LM-Studio 连接状态：未连接";
+      b.className = "px-4 py-2 rounded-lg font-bold text-lg bg-slate-200 text-slate-600";
+    }
+  } catch (e) {
+    $("connBadge").textContent = "LM-Studio 连接状态：未连接";
+  }
+}
+
+/* ================= 配置加载 ================= */
+async function loadConfig() {
+  cfg = await api("/api/config");
+  $("thrVal").textContent = cfg.default_threshold;
+  $("threshold").value = cfg.default_threshold;
+  // 选项池卡片
+  $("poolCards").innerHTML = cfg.options.map(o => `
+    <div class="border-2 border-blue-200 rounded-xl p-4 bg-blue-50">
+      <div class="font-bold text-xl med-blue">${o.name}</div>
+      <p class="text-slate-600 mt-1">${o.description}</p>
+    </div>`).join("");
+  // CSV 病例列表
+  try {
+    const cases = await api("/api/cases");
+    if (cases.cases.length) {
+      $("caseSelect").innerHTML = cases.cases.map(c =>
+        `<option value="${c.case_id}">${c.case_id}｜${c.age}岁${c.sex}｜${c.steps}步${c.has_outcome ? "｜含结局" : ""}</option>`).join("");
+    }
+  } catch (e) { /* CSV 缺失时忽略 */ }
+}
+document.querySelectorAll('input[name="mode"]').forEach(r =>
+  r.addEventListener("change", () => $("caseSelect").classList.toggle("hidden", r.value !== "csv" || !r.checked)));
+
+/* ================= 会话开始 ================= */
+$("startBtn").addEventListener("click", async () => {
+  try {
+    const mode = document.querySelector('input[name="mode"]:checked').value;
+    const body = { mode };
+    if (mode === "csv") body.case_id = $("caseSelect").value || undefined;
+    const res = await api("/api/session/start", { method: "POST", body: JSON.stringify(body) });
+    session = res.session_id;
+    renderPatient(res.patient);
+    if (res.csv_outcome) prefillOutcome(res.csv_outcome);
+    $("decisionResult").classList.add("hidden");
+    $("posteriorWrap").classList.add("hidden");
+    $("compareWrap").classList.add("hidden");
+    updateUncertainty();
+    toast(`会话已启动：${res.message}`, "#16a34a");
+    gotoTab(2);
+  } catch (e) { toast("启动失败：" + e.message, "#dc2626"); }
+});
+
+/* ================= 患者状态面板 ================= */
+function renderPatient(info) {
+  $("pId").textContent = info.case_id;
+  $("pAge").textContent = info.age + " 岁";
+  $("pSex").textContent = info.sex;
+  $("pType").textContent = info.responder_type;
+  drawTrend(info.history);
+}
+function drawTrend(history) {
+  const labels = history.map(h => "T" + h.step);
+  const ds = (label, data, color, axis = "y") => ({ label, data, borderColor: color, backgroundColor: color, tension: .3, pointRadius: 4, yAxisID: axis });
+  const data = {
+    labels,
+    datasets: [
+      ds("MAP (mmHg)", history.map(h => h.map), "#0F5199"),
+      ds("乳酸 (mmol/L)", history.map(h => h.lactate), "#dc2626", "y1"),
+      ds("尿量 (ml/h)", history.map(h => h.urine), "#16a34a", "y2"),
+      ds("去甲肾上腺素 (μg/kg/min)", history.map(h => h.ne_dose), "#ca8a04", "y3"),
+      ds("SOFA 评分", history.map(h => h.sofa), "#7c3aed", "y4"),
+    ]
+  };
+  const scales = {
+    y: { position: "left", title: { display: true, text: "MAP" }, min: 40, max: 110 },
+    y1: { position: "right", title: { display: true, text: "乳酸" }, grid: { drawOnChartArea: false }, min: 0, max: 8 },
+    y2: { position: "right", title: { display: true, text: "尿量" }, grid: { drawOnChartArea: false }, min: 0, max: 150 },
+    y3: { position: "right", title: { display: true, text: "NE 剂量" }, grid: { drawOnChartArea: false }, min: 0, max: 0.6 },
+    y4: { position: "right", title: { display: true, text: "SOFA" }, grid: { drawOnChartArea: false }, min: 0, max: 20 },
+  };
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart($("trendChart"), { type: "line", data, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: "index", intersect: false }, plugins: { legend: { position: "bottom", labels: { font: { size: 14 } } } }, scales } });
+}
+$("nextStepBtn").addEventListener("click", async () => {
+  if (!session) { toast("请先在首页开始会话", "#dc2626"); return; }
+  try {
+    const res = await api("/api/patient/next_step", { method: "POST", body: "{}" });
+    drawTrend(res.history);
+    if (res.finished) toast("已到达该模拟病例末时间步", "#ca8a04");
+  } catch (e) { toast(e.message, "#dc2626"); }
+});
+async function updateUncertainty() {
+  try {
+    const s = await api("/api/bandit/state");
+    $("uncVal").textContent = s.uncertainty;
+    $("uncBar").style.width = s.uncertainty + "%";
+  } catch (e) { /* 会话未开始 */ }
+}
+</script>
+
+<script>
+/* ================= 核心决策面板 ================= */
+$("threshold").addEventListener("input", (e) => $("thrVal").textContent = e.target.value);
+
+$("decideBtn").addEventListener("click", async () => {
+  if (!session) { toast("请先在首页开始会话", "#dc2626"); return; }
+  try {
+    const d = await api("/api/decide", {
+      method: "POST",
+      body: JSON.stringify({ threshold: Number($("threshold").value), llm_enabled: llmOn }),
+    });
+    lastDecision = d;
+    renderDecision(d);
+    drawPosterior(d.posterior);
+    updateUncertainty();
+  } catch (e) { toast("决策计算失败：" + e.message, "#dc2626"); }
+});
+
+function renderDecision(d) {
+  const box = $("decisionResult");
+  box.classList.remove("hidden");
+  if (d.branch === "recommend") {
+    box.innerHTML = `
+      <div class="p-6 rounded-2xl border-4 border-green-500 bg-green-50">
+        <h3 class="font-extrabold text-2xl text-green-700">🟢 模型置信度高，输出仿真参考方案（不确定性 ${d.uncertainty} &lt; 阈值 ${d.threshold}）</h3>
+        <p class="text-2xl mt-3">参考选项：<b class="text-green-800">${d.chosen_action}</b></p>
+        <p class="watermark">⚠️ 仿真参考，不构成临床诊疗指令，医生拥有否决权　【仿真演示，非临床建议】</p>
+      </div>`;
+  } else if (d.branch === "veto") {
+    box.innerHTML = `
+      <div class="p-6 rounded-2xl border-4 border-orange-500 bg-orange-50">
+        <h3 class="font-extrabold text-2xl text-orange-700">🧑‍⚕️ 医生手动否决已生效</h3>
+        <p class="text-2xl mt-3">最终执行动作：<b>${d.chosen_action}</b></p>
+        <p class="watermark">【仿真演示，非临床建议】</p>
+      </div>`;
+  } else {
+    box.innerHTML = `
+      <div class="p-6 rounded-2xl border-4 border-yellow-500 bg-yellow-50">
+        <h3 class="font-extrabold text-2xl text-yellow-700">🟡 证据不足，仿真执行自适应随机分配（不确定性 ${d.uncertainty} &gt; 阈值 ${d.threshold}）</h3>
+        <p class="text-2xl mt-3">本次仿真随机分配动作：<b class="text-yellow-800">${d.chosen_action}</b></p>
+        <p class="mt-1 text-slate-600">仿真：该亚组现有证据不足，模拟床旁随机用于积累临床证据。</p>
+        <p class="watermark">【仿真演示，非临床建议】</p>
+      </div>`;
+  }
+}
+
+function drawPosterior(posterior) {
+  const ids = Object.keys(posterior);
+  const names = ids.map(id => {
+    const o = cfg.options.find(x => x.id === id);
+    return o ? o.short : id;
+  });
+  // 浮动区间条（ci_low → ci_high）+ 均值线
+  const data = {
+    labels: names,
+    datasets: [
+      { label: "95% 区间下沿（隐藏基座）", data: ids.map(i => posterior[i].ci_low), backgroundColor: "transparent", stack: "ci" },
+      { label: "95% 置信区间", data: ids.map(i => +(posterior[i].ci_high - posterior[i].ci_low).toFixed(3)),
+        backgroundColor: "rgba(15,81,153,.25)", stack: "ci", borderColor: "rgba(15,81,153,.5)", borderWidth: 1 },
+      { type: "line", label: "后验期望收益", data: ids.map(i => posterior[i].mean),
+        borderColor: "#0F5199", backgroundColor: "#0F5199", pointRadius: 8, pointStyle: "rectRot" },
+    ]
+  };
+  if (postChart) postChart.destroy();
+  postChart = new Chart($("postChart"), {
+    type: "bar",
+    data,
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: "bottom", labels: { font: { size: 14 } } } },
+      scales: {
+        y: { min: 0, max: 1, title: { display: true, text: "期望收益（0-1）" } },
+        x: { ticks: { font: { size: 15, weight: "bold" } } },
+      },
+    },
+  });
+  $("posteriorWrap").classList.remove("hidden");
+}
+
+/* ---- 医生否决 ---- */
+$("vetoBtn").addEventListener("click", async () => {
+  if (!lastDecision) { toast("请先执行决策计算", "#dc2626"); return; }
+  const reason = $("vetoReason").value.trim();
+  const action = $("vetoAction").value;
+  if (!action) { toast("请选择手动指定的动作 A 或 B", "#dc2626"); return; }
+  if (!reason) { toast("请填写否决理由", "#dc2626"); return; }
+  try {
+    const res = await api("/api/veto", { method: "POST", body: JSON.stringify({ reason, action }) });
+    renderDecision({ ...lastDecision, branch: "veto" });
+    toast(res.message, "#16a34a");
+  } catch (e) { toast(e.message, "#dc2626"); }
+});
+
+/* ---- 安全闸门（状态写入审计日志，仅 UI 模拟） ---- */
+["gate1", "gate2", "gate3"].forEach(id => {
+  $(id).addEventListener("change", async () => {
+    try {
+      const res = await api("/api/safety", {
+        method: "POST",
+        body: JSON.stringify({ contraindication: $("gate1").checked, emergency: $("gate2").checked, palliative: $("gate3").checked }),
+      });
+      toast("安全闸门状态已写入审计日志", "#0F5199");
+    } catch (e) { toast(e.message, "#dc2626"); }
+  });
+});
+
+/* ---- 本地 LLM 解读 ---- */
+$("interpretBtn").addEventListener("click", async () => {
+  if (!lastDecision) { toast("请先执行决策计算", "#dc2626"); return; }
+  const out = $("llmOut");
+  out.classList.remove("hidden");
+  out.textContent = "⏳ 正在调用本地大模型（Qwen）生成解读，请稍候…";
+  try {
+    const res = await api("/api/llm/interpret", { method: "POST", body: JSON.stringify({ model: $("llmModel").value }) });
+    if (res.ok) { out.textContent = res.text; toast("LLM 解读已生成", "#16a34a"); }
+    else { out.textContent = "⚠️ " + res.message; toast("LLM 调用失败", "#ca8a04"); }
+  } catch (e) { out.textContent = "⚠️ 调用异常：" + e.message; }
+});
+
+/* ---- 向量检索 ---- */
+$("retrieveBtn").addEventListener("click", async () => {
+  if (!lastDecision) { toast("请先执行决策计算", "#dc2626"); return; }
+  const out = $("retrievalOut");
+  out.classList.remove("hidden");
+  out.innerHTML = "<p class='text-slate-500'>⏳ 正在向量化并检索 Top-2 指南证据…</p>";
+  try {
+    const res = await api("/api/retrieve", { method: "POST", body: JSON.stringify({ model: $("llmModel").value }) });
+    if (res.ok) {
+      out.innerHTML = res.results.map(r => `
+        <div class="border rounded-lg p-4 bg-teal-50">
+          <div class="text-sm font-bold text-teal-800">${r.id}｜相似度 ${r.score}｜${r.source}</div>
+          <p class="mt-1 text-lg">${r.text}</p>
+        </div>`).join("");
+      toast("已返回 Top-2 参考证据", "#16a34a");
+    } else {
+      out.innerHTML = `<p class="text-yellow-700 font-bold">⚠️ ${res.message}</p>`;
+    }
+  } catch (e) { out.innerHTML = `<p class="text-red-600 font-bold">⚠️ 检索异常：${e.message}</p>`; }
+});
+
+/* ================= 结局反馈 & 策略更新 ================= */
+function prefillOutcome(o) {
+  $("oSurvival").value = o.survival_28d ? "1" : "0";
+  $("oLactate").value = o.lactate_drop;
+  $("oVaso").value = o.vasopressor_reduced ? "1" : "0";
+  $("oIcu").value = o.icu_days;
+  toast("已用病例预设结局预填表单（可修改）", "#0F5199");
+}
+["wSurv", "wLac", "wVaso"].forEach(id => {
+  $(id).addEventListener("input", () => {
+    $("wSurvV").textContent = $("wSurv").value;
+    $("wLacV").textContent = $("wLac").value;
+    $("wVasoV").textContent = $("wVaso").value;
+  });
+});
+
+$("outcomeBtn").addEventListener("click", async () => {
+  if (!session) { toast("请先在首页开始会话", "#dc2626"); return; }
+  const body = {
+    survival_28d: $("oSurvival").value === "1",
+    lactate_drop: Number($("oLactate").value || 0),
+    vasopressor_reduced: $("oVaso").value === "1",
+    icu_days: Number($("oIcu").value || 0),
+    weights: { survival: Number($("wSurv").value), lactate_improvement: Number($("wLac").value), vasopressor_reduction: Number($("wVaso").value) },
+  };
+  try {
+    const res = await api("/api/outcome", { method: "POST", body: JSON.stringify(body) });
+    const msg = $("outcomeMsg");
+    msg.classList.remove("hidden");
+    msg.className = "mb-4 p-4 rounded-lg font-bold text-lg bg-green-100 text-green-800 border-2 border-green-500";
+    msg.textContent = `✅ ${res.message}（结局反馈已回传，后验分布已更新）`;
+    drawCompare(res.before, res.after);
+    updateUncertainty();
+    lastDecision = null;
+    toast("策略更新完成", "#16a34a");
+  } catch (e) {
+    const msg = $("outcomeMsg");
+    msg.classList.remove("hidden");
+    msg.className = "mb-4 p-4 rounded-lg font-bold text-lg bg-red-100 text-red-700 border-2 border-red-500";
+    msg.textContent = "⚠️ " + e.message;
+  }
+});
+
+function drawCompare(before, after) {
+  const ids = Object.keys(after);
+  const names = ids.map(id => { const o = cfg.options.find(x => x.id === id); return o ? o.short : id; });
+  const data = {
+    labels: names,
+    datasets: [
+      { label: "更新前 期望收益", data: ids.map(i => before[i].mean), backgroundColor: "rgba(148,163,184,.75)" },
+      { label: "更新后 期望收益", data: ids.map(i => after[i].mean), backgroundColor: "#0F5199" },
+      { label: "更新后 95% 区间下沿", data: ids.map(i => after[i].ci_low), backgroundColor: "transparent" },
+      { label: "更新后 95% 区间", data: ids.map(i => +(after[i].ci_high - after[i].ci_low).toFixed(3)),
+        backgroundColor: "rgba(15,81,153,.18)", stack: "ci2" },
+    ],
+  };
+  if (compareChart) compareChart.destroy();
+  compareChart = new Chart($("compareChart"), {
+    type: "bar",
+    data,
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: "bottom", labels: { font: { size: 14 } } } },
+      scales: { y: { min: 0, max: 1 }, x: { ticks: { font: { size: 15, weight: "bold" } } } },
+    },
+  });
+  $("compareWrap").classList.remove("hidden");
+}
+
+/* ================= 审计日志 ================= */
+async function loadAudit() {
+  try {
+    const res = await api("/api/audit");
+    const icon = { session_start: "🚀", decision: "🎲", veto: "🧑‍⚕️", safety_gates: "🛡️", outcome: "📤", llm_interpret: "📝", retrieve: "📚", audit_cleared: "🗑" };
+    $("auditBody").innerHTML = res.records.slice().reverse().map(r => {
+      const llm = r.llm_text ? "📝 有" : (r.evidence ? "📚 " + r.evidence.map(e => e.id).join(",") : "—");
+      const veto = r.event === "veto" ? `${r.veto_action}｜${(r.reason || "").slice(0, 20)}` : "—";
+      const oc = r.event === "outcome" ? `奖励${r.reward}→臂${r.arm_updated}` : "—";
+      return `<tr class="border hover:bg-blue-50">
+        <td class="border">${r.ts || ""}</td><td class="border">${r.session_id || "—"}</td>
+        <td class="border">${icon[r.event] || ""}${r.event || ""}</td>
+        <td class="border">${r.patient_id || "—"}</td>
+        <td class="border">${r.uncertainty ?? "—"}</td>
+        <td class="border">${r.branch || "—"}</td>
+        <td class="border font-bold">${r.system_action || (r.veto_action ?? "—")}</td>
+        <td class="border">${veto}</td><td class="border">${oc}</td><td class="border">${llm}</td>
+      </tr>`;
+    }).join("") || `<tr><td colspan="10" class="text-center text-slate-400 py-6">暂无日志</td></tr>`;
+  } catch (e) { toast("日志加载失败：" + e.message, "#dc2626"); }
+}
+$("refreshAudit").addEventListener("click", loadAudit);
+$("clearAudit").addEventListener("click", async () => {
+  if (!confirm("确认清空审计日志？（演示功能）")) return;
+  try {
+    await api("/api/audit/clear", { method: "POST", body: "{}" });
+    loadAudit();
+    toast("日志已清空", "#16a34a");
+  } catch (e) { toast(e.message, "#dc2626"); }
+});
+
+/* ================= 启动 ================= */
+(async function init() {
+  await loadConfig();
+  await probeConnection();
+  updateUncertainty();
+})();
+</script>
+</body>
+</html>
